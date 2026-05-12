@@ -18,10 +18,10 @@ describe('AppComponent', () => {
     expect(app.title).toEqual('SwitchConfiguratorPlan');
   });
 
-  it('should render title', () => {
+  it('should render configurator component', () => {
     const fixture = TestBed.createComponent(AppComponent);
     fixture.detectChanges();
     const compiled = fixture.nativeElement as HTMLElement;
-    expect(compiled.querySelector('.content span')?.textContent).toContain('SwitchConfiguratorPlan app is running!');
+    expect(compiled.querySelector('app-switch-plate-configurator')).toBeTruthy();
   });
 });
