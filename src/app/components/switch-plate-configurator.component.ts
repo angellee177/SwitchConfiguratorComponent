@@ -1,242 +1,149 @@
-import { Component, EventEmitter, Input, OnInit, Output } from '@angular/core';
-import { FormArray, FormBuilder, ReactiveFormsModule } from '@angular/forms';
+import { Component, DestroyRef, EventEmitter, inject, OnInit, Output } from '@angular/core';
+import { takeUntilDestroyed } from '@angular/core/rxjs-interop';
+import { FormArray, FormBuilder, FormGroup, ReactiveFormsModule } from '@angular/forms';
+import { take } from 'rxjs';
 
-type StyleId = 'vision' | 'horizon' | 'infinity' | 'eclipse';
-type ColourId = 'black' | 'white';
-type OrientationId = 'horizontal' | 'vertical';
-type MechId =
-  | '10a-switch'
-  | '16a-switch'
-  | 'usb-a'
-  | 'usb-ac'
-  | 'satellite'
-  | 'tv'
-  | 'data';
-
-interface ConfigOption<T> {
-  id: T;
-  label: string;
-  code: string;
-}
-
-interface StyleOption extends ConfigOption<StyleId> {
-  supportsCustomColours: boolean;
-  combinations: string[];
-}
-
-interface ColourCombination {
-  id: string;
-  label: string;
-  code: string;
-  colours: {
-    backplate: ColourId;
-    faceplate: ColourId;
-    mech: ColourId;
-  };
-}
-
-interface ProductMap {
-  styles: StyleOption[];
-  colours: Array<ConfigOption<ColourId>>;
-  orientations: Array<ConfigOption<OrientationId>>;
-  mechs: Array<ConfigOption<MechId> & { supportsColour: boolean }>;
-  combinations: ColourCombination[];
-}
-
-const PRODUCT_MAP: ProductMap = {
-  styles: [
-    {
-      id: 'vision',
-      label: 'Vision',
-      code: 'VSW',
-      supportsCustomColours: true,
-      combinations: [],
-    },
-    {
-      id: 'horizon',
-      label: 'Horizon',
-      code: 'HSW',
-      supportsCustomColours: false,
-      combinations: ['full-white'],
-    },
-    {
-      id: 'infinity',
-      label: 'Infinity',
-      code: 'ISW',
-      supportsCustomColours: false,
-      combinations: ['full-white', 'full-black'],
-    },
-    {
-      id: 'eclipse',
-      label: 'Eclipse',
-      code: 'ESW',
-      supportsCustomColours: false,
-      combinations: ['full-white'],
-    },
-  ],
-  colours: [
-    { id: 'black', label: 'Black', code: 'B' },
-    { id: 'white', label: 'White', code: 'W' },
-  ],
-  orientations: [
-    { id: 'horizontal', label: 'Horizontal', code: 'H' },
-    { id: 'vertical', label: 'Vertical', code: 'V' },
-  ],
-  mechs: [
-    { id: '10a-switch', label: '10A Switch', code: '10', supportsColour: true },
-    { id: '16a-switch', label: '16A Switch', code: '16', supportsColour: true },
-    { id: 'usb-a', label: 'USB A', code: 'USBA', supportsColour: false },
-    { id: 'usb-ac', label: 'USB A/C', code: 'USBAC', supportsColour: false },
-    { id: 'satellite', label: 'Satellite', code: 'SAT', supportsColour: false },
-    { id: 'tv', label: 'TV', code: 'TV', supportsColour: false },
-    { id: 'data', label: 'Data', code: 'DATA', supportsColour: false },
-  ],
-  combinations: [
-    {
-      id: 'full-white',
-      label: 'Full White',
-      code: 'WWW',
-      colours: { backplate: 'white', faceplate: 'white', mech: 'white' },
-    },
-    {
-      id: 'full-black',
-      label: 'Full Black',
-      code: 'BBB',
-      colours: { backplate: 'black', faceplate: 'black', mech: 'black' },
-    },
-  ],
-};
+import type { ColourCombination, ProductMap } from '../core/domains/models/switch-plate-catalog.model';
+import { SwitchPlateCatalogService } from '../core/domains/services/switch-plate-catalog.service';
 
 @Component({
   selector: 'app-switch-plate-configurator',
   imports: [ReactiveFormsModule],
   template: `
-    <section class="configurator" [formGroup]="form">
-      <header class="hero">
-        <h1>Switch Plate Configurator</h1>
-      </header>
+    @if (loadError) {
+      <section class="configurator">
+        <p class="error" role="alert">{{ loadError }}</p>
+      </section>
+    } @else if (loading || !form) {
+      <section class="configurator">
+        <p>Loading catalog…</p>
+      </section>
+    } @else {
+      <section class="configurator" [formGroup]="form">
+        <header class="hero">
+          <h1>Switch Plate Configurator</h1>
+        </header>
 
-      <div class="layout">
-        <div class="card">
-          <h2>Plate Configuration</h2>
+        <div class="layout">
+          <div class="card">
+            <h2>Plate Configuration</h2>
 
-          <label>
-            Style
-            <select formControlName="style">
-              @for (style of productMap.styles; track style) {
-                <option [value]="style.id">{{ style.label }}</option>
-              }
-            </select>
-          </label>
-
-          <label>
-            Number of Gangs
-            <select formControlName="gangs">
-              @for (gang of gangOptions; track gang) {
-                <option [value]="gang">{{ gang }} Gang</option>
-              }
-            </select>
-          </label>
-
-          <label>
-            Orientation
-            <select formControlName="orientation">
-              @for (orientation of productMap.orientations; track orientation) {
-                <option [value]="orientation.id">
-                  {{ orientation.label }}
-                </option>
-              }
-            </select>
-          </label>
-
-          @if (isVisionStyle()) {
-            <h3>Vision Colours</h3>
             <label>
-              Backplate Colour
-              <select formControlName="backplateColour">
-                @for (colour of productMap.colours; track colour) {
-                  <option [value]="colour.id">{{ colour.label }}</option>
+              Style
+              <select formControlName="style">
+                @for (style of productMap!.styles; track style.id) {
+                  <option [value]="style.id">{{ style.label }}</option>
                 }
               </select>
             </label>
+
             <label>
-              Faceplate Colour
-              <select formControlName="faceplateColour">
-                @for (colour of productMap.colours; track colour) {
-                  <option [value]="colour.id">{{ colour.label }}</option>
+              Number of Gangs
+              <select formControlName="gangs">
+                @for (gang of gangOptions; track gang) {
+                  <option [value]="gang">{{ gang }} Gang</option>
                 }
               </select>
             </label>
+
             <label>
-              Default Mech Colour
-              <select formControlName="mechColour">
-                @for (colour of productMap.colours; track colour) {
-                  <option [value]="colour.id">{{ colour.label }}</option>
-                }
-              </select>
-            </label>
-          } @else {
-            <h3>Colour Combination</h3>
-            <label>
-              Combination
-              <select formControlName="combination">
-                @for (
-                  combination of availableCombinations();
-                  track combination
-                ) {
-                  <option [value]="combination.id">
-                    {{ combination.label }}
+              Orientation
+              <select formControlName="orientation">
+                @for (orientation of productMap!.orientations; track orientation.id) {
+                  <option [value]="orientation.id">
+                    {{ orientation.label }}
                   </option>
                 }
               </select>
             </label>
-          }
-        </div>
 
-        <div class="card">
-          <h2>Mech Selection</h2>
-          <p class="hint">
-            The selector count follows the selected gang count.
-          </p>
+            @if (isVisionStyle()) {
+              <h3>Vision Colours</h3>
+              <label>
+                Backplate Colour
+                <select formControlName="backplateColour">
+                  @for (colour of productMap!.colours; track colour.id) {
+                    <option [value]="colour.id">{{ colour.label }}</option>
+                  }
+                </select>
+              </label>
+              <label>
+                Faceplate Colour
+                <select formControlName="faceplateColour">
+                  @for (colour of productMap!.colours; track colour.id) {
+                    <option [value]="colour.id">{{ colour.label }}</option>
+                  }
+                </select>
+              </label>
+              <label>
+                Default Mech Colour
+                <select formControlName="mechColour">
+                  @for (colour of productMap!.colours; track colour.id) {
+                    <option [value]="colour.id">{{ colour.label }}</option>
+                  }
+                </select>
+              </label>
+            } @else {
+              <h3>Colour Combination</h3>
+              <label>
+                Combination
+                <select formControlName="combination">
+                  @for (combination of availableCombinations(); track combination.id) {
+                    <option [value]="combination.id">
+                      {{ combination.label }}
+                    </option>
+                  }
+                </select>
+              </label>
+            }
+          </div>
 
-          <div formArrayName="mechs" class="mechs">
-            @for (mech of mechs.controls; track mech; let i = $index) {
-              <fieldset [formGroupName]="i">
-                <legend>Gang {{ i + 1 }}</legend>
-                <label>
-                  Mech Type
-                  <select formControlName="type">
-                    @for (option of productMap.mechs; track option) {
-                      <option [value]="option.id">{{ option.label }}</option>
-                    }
-                  </select>
-                </label>
-                @if (isVisionStyle() && supportsMechColour(mech.value.type)) {
+          <div class="card">
+            <h2>Mech Selection</h2>
+            <p class="hint">The selector count follows the selected gang count.</p>
+
+            <div formArrayName="mechs" class="mechs">
+              @for (mech of mechs.controls; track $index) {
+                <fieldset [formGroupName]="$index">
+                  <legend>Gang {{ $index + 1 }}</legend>
                   <label>
-                    Switch Colour
-                    <select formControlName="colour">
-                      @for (colour of productMap.colours; track colour) {
-                        <option [value]="colour.id">{{ colour.label }}</option>
+                    Mech Type
+                    <select formControlName="type">
+                      @for (option of productMap!.mechs; track option.id) {
+                        <option [value]="option.id">{{ option.label }}</option>
                       }
                     </select>
                   </label>
-                }
-              </fieldset>
-            }
+                  @if (isVisionStyle() && supportsMechColour(mech.value.type)) {
+                    <label>
+                      Switch Colour
+                      <select formControlName="colour">
+                        @for (colour of productMap!.colours; track colour.id) {
+                          <option [value]="colour.id">{{ colour.label }}</option>
+                        }
+                      </select>
+                    </label>
+                  }
+                </fieldset>
+              }
+            </div>
           </div>
         </div>
-      </div>
 
-      <section class="output">
-        <p class="eyebrow">Generated Part Number</p>
-        <strong>{{ partNumber }}</strong>
+        <section class="output">
+          <p class="eyebrow">Generated Part Number</p>
+          <strong>{{ partNumber }}</strong>
+        </section>
       </section>
-    </section>
+    }
   `,
   styleUrls: ['./switch-plate-configurator.component.css'],
 })
 export class SwitchPlateConfiguratorComponent implements OnInit {
-  @Input() productMap: ProductMap = PRODUCT_MAP;
+  private readonly fb = inject(FormBuilder);
+  private readonly catalog = inject(SwitchPlateCatalogService);
+  private readonly destroyRef = inject(DestroyRef);
+
   @Output() configurationChange = new EventEmitter<{
     value: unknown;
     partNumber: string;
@@ -244,33 +151,55 @@ export class SwitchPlateConfiguratorComponent implements OnInit {
 
   readonly gangOptions = [1, 2, 3, 4, 5, 6];
   partNumber = '';
-
-  readonly form = this.fb.group({
-    style: this.fb.nonNullable.control<StyleId>('vision'),
-    gangs: this.fb.nonNullable.control(1),
-    orientation: this.fb.nonNullable.control<OrientationId>('horizontal'),
-    backplateColour: this.fb.nonNullable.control<ColourId>('black'),
-    faceplateColour: this.fb.nonNullable.control<ColourId>('white'),
-    mechColour: this.fb.nonNullable.control<ColourId>('white'),
-    combination: this.fb.nonNullable.control('full-white'),
-    mechs: this.fb.array([this.createMech()]),
-  });
-
-  constructor(private readonly fb: FormBuilder) {}
+  loading = true;
+  loadError: string | null = null;
+  productMap: ProductMap | null = null;
+  form: FormGroup | null = null;
 
   ngOnInit(): void {
-    this.form.controls.gangs.valueChanges.subscribe((gangs) =>
-      this.syncMechCount(Number(gangs)),
-    );
-    this.form.controls.style.valueChanges.subscribe(() =>
-      this.applyStyleDefaults(),
-    );
-    this.form.valueChanges.subscribe(() => this.updatePartNumber());
-    this.updatePartNumber();
+    this.catalog
+      .loadCatalog()
+      .pipe(take(1))
+      .subscribe({
+        next: (pm: ProductMap) => {
+          this.productMap = pm;
+          const form = this.fb.group({
+            style: this.fb.nonNullable.control(pm.styles[0]?.id ?? ''),
+            gangs: this.fb.nonNullable.control(1),
+            orientation: this.fb.nonNullable.control(pm.orientations[0]?.id ?? ''),
+            backplateColour: this.fb.nonNullable.control(pm.colours[0]?.id ?? ''),
+            faceplateColour: this.fb.nonNullable.control(pm.colours[0]?.id ?? ''),
+            mechColour: this.fb.nonNullable.control(pm.colours[0]?.id ?? ''),
+            combination: this.fb.nonNullable.control(''),
+            mechs: this.fb.array([this.createMechGroup(pm)]),
+          });
+          this.form = form;
+
+          form.controls['gangs'].valueChanges
+            .pipe(takeUntilDestroyed(this.destroyRef))
+            .subscribe((gangs) => this.syncMechCount(Number(gangs)));
+
+          form.controls['style'].valueChanges
+            .pipe(takeUntilDestroyed(this.destroyRef))
+            .subscribe(() => this.applyStyleDefaults());
+
+          form.valueChanges.pipe(takeUntilDestroyed(this.destroyRef)).subscribe(() => {
+            this.updatePartNumber();
+          });
+
+          this.applyStyleDefaults();
+          this.updatePartNumber();
+          this.loading = false;
+        },
+        error: (err: unknown) => {
+          this.loading = false;
+          this.loadError = err instanceof Error ? err.message : String(err);
+        },
+      });
   }
 
   get mechs(): FormArray {
-    return this.form.controls.mechs;
+    return this.form?.get('mechs') as FormArray;
   }
 
   isVisionStyle(): boolean {
@@ -278,47 +207,58 @@ export class SwitchPlateConfiguratorComponent implements OnInit {
   }
 
   availableCombinations(): ColourCombination[] {
-    const allowed = this.currentStyle()?.combinations ?? [];
-
-    return this.productMap.combinations.filter((combination) =>
-      allowed.includes(combination.id),
-    );
+    const pm = this.productMap;
+    const style = this.currentStyle();
+    if (!pm || !style) {
+      return [];
+    }
+    const allowed = new Set(style.allowedColourCombinationIds);
+    return pm.combinations.filter((c) => allowed.has(c.id));
   }
 
-  supportsMechColour(type: MechId): boolean {
-    return (
-      this.productMap.mechs.find((mech) => mech.id === type)?.supportsColour ??
-      false
-    );
+  supportsMechColour(type: string): boolean {
+    const pm = this.productMap;
+    if (!pm) {
+      return false;
+    }
+    return pm.mechs.find((m) => m.id === type)?.supportsColour ?? false;
   }
 
   private syncMechCount(gangs: number): void {
-    while (this.mechs.length < gangs) {
-      this.mechs.push(this.createMech());
+    const pm = this.productMap;
+    const form = this.form;
+    if (!pm || !form) {
+      return;
     }
-
-    while (this.mechs.length > gangs) {
-      this.mechs.removeAt(this.mechs.length - 1);
+    const arr = form.get('mechs') as FormArray;
+    while (arr.length < gangs) {
+      arr.push(this.createMechGroup(pm));
     }
-
+    while (arr.length > gangs) {
+      arr.removeAt(arr.length - 1);
+    }
     this.updatePartNumber();
   }
 
   private applyStyleDefaults(): void {
+    const pm = this.productMap;
+    const form = this.form;
+    if (!pm || !form) {
+      return;
+    }
     if (this.isVisionStyle()) {
       this.updatePartNumber();
       return;
     }
 
-    const firstCombination = this.availableCombinations()[0];
-
-    if (firstCombination) {
-      this.form.patchValue(
+    const first = this.availableCombinations()[0];
+    if (first) {
+      form.patchValue(
         {
-          combination: firstCombination.id,
-          backplateColour: firstCombination.colours.backplate,
-          faceplateColour: firstCombination.colours.faceplate,
-          mechColour: firstCombination.colours.mech,
+          combination: first.id,
+          backplateColour: first.colours.backplate,
+          faceplateColour: first.colours.faceplate,
+          mechColour: first.colours.mech,
         },
         { emitEvent: false },
       );
@@ -327,59 +267,64 @@ export class SwitchPlateConfiguratorComponent implements OnInit {
     this.updatePartNumber();
   }
 
-  private createMech() {
+  private createMechGroup(pm: ProductMap): FormGroup {
     return this.fb.group({
-      type: this.fb.nonNullable.control<MechId>('10a-switch'),
-      colour: this.fb.nonNullable.control<ColourId>('white'),
+      type: this.fb.nonNullable.control(pm.mechs[0]?.id ?? ''),
+      colour: this.fb.nonNullable.control(pm.colours[0]?.id ?? ''),
     });
   }
 
   private updatePartNumber(): void {
-    this.partNumber = this.generatePartNumber();
+    const form = this.form;
+    const pm = this.productMap;
+    if (!form || !pm) {
+      return;
+    }
+    this.partNumber = this.generatePartNumber(pm, form);
     this.configurationChange.emit({
-      value: this.form.getRawValue(),
+      value: form.getRawValue(),
       partNumber: this.partNumber,
     });
   }
 
-  private generatePartNumber(): string {
-    const value = this.form.getRawValue();
+  private generatePartNumber(pm: ProductMap, form: FormGroup): string {
+    const value = form.getRawValue() as {
+      style: string;
+      gangs: number;
+      orientation: string;
+      backplateColour: string;
+      faceplateColour: string;
+      mechColour: string;
+      combination: string;
+      mechs: Array<{ type: string; colour: string }>;
+    };
     const styleCode = this.currentStyle()?.code ?? 'NA';
     const orientationCode =
-      this.productMap.orientations.find((item) => item.id === value.orientation)
-        ?.code ?? 'NA';
+      pm.orientations.find((o) => o.id === value.orientation)?.code ?? 'NA';
     const finishCode = this.isVisionStyle()
-      ? `${this.colourCode(value.backplateColour)}${this.colourCode(value.faceplateColour)}`
-      : (this.productMap.combinations.find(
-          (item) => item.id === value.combination,
-        )?.code ?? 'NA');
+      ? `${this.colourCode(pm, value.backplateColour)}${this.colourCode(pm, value.faceplateColour)}`
+      : (pm.combinations.find((c) => c.id === value.combination)?.code ?? 'NA');
     const mechCodes = value.mechs.map((mech) => {
-      const code =
-        this.productMap.mechs.find((item) => item.id === mech.type)?.code ??
-        'NA';
+      const code = pm.mechs.find((m) => m.id === mech.type)?.code ?? 'NA';
       return this.isVisionStyle() && this.supportsMechColour(mech.type)
-        ? `${code}${this.colourCode(mech.colour)}`
+        ? `${code}${this.colourCode(pm, mech.colour)}`
         : code;
     });
 
-    return [
-      styleCode,
-      `${value.gangs}G`,
-      orientationCode,
-      finishCode,
-      ...mechCodes,
-    ].join('-');
+    return [styleCode, `${value.gangs}G`, orientationCode, finishCode, ...mechCodes].join('-');
   }
 
-  private colourCode(colour: ColourId): string {
-    return (
-      this.productMap.colours.find((item) => item.id === colour)?.code ?? 'NA'
-    );
+  private colourCode(pm: ProductMap, colourId: string): string {
+    return pm.colours.find((c) => c.id === colourId)?.code ?? 'NA';
   }
 
-  private currentStyle(): StyleOption | undefined {
-    return this.productMap.styles.find(
-      (style) => style.id === this.form.controls.style.value,
-    );
+  private currentStyle() {
+    const pm = this.productMap;
+    const form = this.form;
+    if (!pm || !form) {
+      return undefined;
+    }
+    const styleId = form.controls['style'].value as string;
+    return pm.styles.find((s) => s.id === styleId);
   }
 }
