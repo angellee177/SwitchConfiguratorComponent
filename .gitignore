@@ -6,6 +6,12 @@
 /out-tsc
 /bazel-out
 
+# Local env (see .env.example)
+.env
+
+# Generated from .env for Angular dev builds
+/src/environments/environment.development.generated.ts
+
 # Node
 /node_modules
 npm-debug.log

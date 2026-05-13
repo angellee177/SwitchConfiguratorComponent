@@ -1,11 +1,10 @@
 import { Component } from '@angular/core';
 
-import { RouterOutlet } from '@angular/router';
 import { SwitchPlateConfiguratorComponent } from './components/switch-plate-configurator.component';
 
 @Component({
   selector: 'app-root',
-  imports: [RouterOutlet, SwitchPlateConfiguratorComponent],
+  imports: [SwitchPlateConfiguratorComponent],
   templateUrl: './app.component.html',
   styleUrls: ['./app.component.css'],
 })
