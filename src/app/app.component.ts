@@ -1,7 +1,7 @@
 import { Component } from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { RouterOutlet } from '@angular/router';
-import { SwitchPlateConfiguratorComponent } from './switch-plate-configurator/switch-plate-configurator.component';
+import { SwitchPlateConfiguratorComponent } from './components/switch-plate-configurator.component';
 
 @Component({
   selector: 'app-root',
