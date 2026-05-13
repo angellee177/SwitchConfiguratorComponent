@@ -78,10 +78,9 @@ const PRODUCT_MAP: ProductMap = {
 };
 
 @Component({
-  selector: 'app-switch-plate-configurator',
-  standalone: true,
-  imports: [CommonModule, ReactiveFormsModule],
-  template: `
+    selector: 'app-switch-plate-configurator',
+    imports: [CommonModule, ReactiveFormsModule],
+    template: `
     <section class="configurator" [formGroup]="form">
       <header class="hero">
         <h1>Switch Plate Configurator</h1>
@@ -179,7 +178,7 @@ const PRODUCT_MAP: ProductMap = {
       </section>
     </section>
   `,
-  styleUrls: ['./switch-plate-configurator.component.css'],
+    styleUrls: ['./switch-plate-configurator.component.css']
 })
 export class SwitchPlateConfiguratorComponent implements OnInit {
   @Input() productMap: ProductMap = PRODUCT_MAP;
